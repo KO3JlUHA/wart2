@@ -1,5 +1,16 @@
 import socket
 import keyboard
+import threading
+import pyautogui
+import win32api
+from pynput import mouse
+
+
+class F:
+    flag = False
+    s = None
+    ip = ''
+
 
 are_down = []
 key_names = ["space", "alt", "left windows", "ctrl", "shift", "caps lock", "tab", "esc", "f1", "f2", "f3", "f4", "f5",
@@ -18,8 +29,8 @@ key_values = [0x20, 0x12, 0x5b, 0xa2, 0xa0, 0x14, 0x09, 0x1b, 0x70, 0x71, 0x72, 
               0x4e, 0x4f, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a]
 
 
-def log_keyboard(s: socket.socket = None, ip: tuple = ('', 0)):
-    while 1:
+def log_keyboard():
+    while F.flag:
         relevant_string = str(keyboard.read_event())[14:-1]
         index_of_last_space = len(relevant_string) - relevant_string[::-1].index(' ') - 1
         key = relevant_string[:index_of_last_space].lower()
@@ -28,7 +39,49 @@ def log_keyboard(s: socket.socket = None, ip: tuple = ('', 0)):
             key = key_values[key_names.index(key)]
         if action == 'down' and key not in are_down:
             are_down.append(key)
-            s.sendto(f'kd{key}'.encode(), ip)
+            F.s.sendto(f'kd{key}'.encode(), F.ip)
         else:
-            s.sendto(f'ku{key}'.encode(), ip)
+            F.s.sendto(f'ku{key}'.encode(), F.ip)
             are_down.remove(key)
+
+
+def on_scroll(x, y, dx, dy):
+    if dy > 0:
+        F.s.sendto("msu".encode(), F.ip)
+    else:
+        F.s.sendto("msd".encode(), F.ip)
+
+
+def x_func():
+    with mouse.Listener(on_scroll=on_scroll) as listener:
+        listener.join()
+
+
+def log_mouse():
+    threading.Thread(target=x_func).start()
+    w, h = pyautogui.size()
+    x, y = pyautogui.position()
+    state_left = win32api.GetKeyState(0x01)  # Left button down = 0 or 1. Button up = -127 or -128
+    state_right = win32api.GetKeyState(0x02)  # Right button down = 0 or 1. Button up = -127 or -128
+    while F.flag:
+        a, b = pyautogui.position()
+        a = a * 100 // w
+        b = b * 100 // h
+        if (a, b) != (x, y):
+            x, y = a, b
+            t = "mM" + f'{x}'.zfill(3) + f'{y}'.zfill(3)
+            F.s.sendto(t.encode(), F.ip)
+        a = win32api.GetKeyState(0x01)
+        b = win32api.GetKeyState(0x02)
+        if a != state_left:  # Button state changed
+            state_left = a
+            if a < 0:
+                F.s.sendto('mld'.encode(), F.ip)
+            else:
+                F.s.sendto('mlu'.encode(), F.ip)
+        if b != state_right:  # Button state changed
+            state_right = b
+            if b < 0:
+                F.s.sendto('mrd'.encode(), F.ip)
+            else:
+                F.s.sendto('mru'.encode(), F.ip)
