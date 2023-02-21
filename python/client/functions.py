@@ -36,7 +36,6 @@ def log_keyboard():
         relevant_string = str(keyboard.read_event())[14:-1]
         index_of_last_space = len(relevant_string) - relevant_string[::-1].index(' ') - 1
         key = relevant_string[:index_of_last_space].lower()
-        print(key)
         action = relevant_string[index_of_last_space + 1:]
         if key in key_names:
             key = key_values[key_names.index(key)]
@@ -56,7 +55,7 @@ def on_scroll(x, y, dx, dy):
         F.s.sendto("msu".encode(), F.ip)
     else:
         F.s.sendto("msd".encode(), F.ip)
-    time.sleep(0.015)
+    time.sleep(0.01)
 
 
 def x_func():
@@ -92,4 +91,4 @@ def log_mouse():
                 F.s.sendto('mrd'.encode(), F.ip)
             else:
                 F.s.sendto('mru'.encode(), F.ip)
-        time.sleep(0.015)
+        time.sleep(0.01)
