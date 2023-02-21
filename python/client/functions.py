@@ -1,4 +1,6 @@
 import socket
+import time
+
 import keyboard
 import threading
 import pyautogui
@@ -34,15 +36,19 @@ def log_keyboard():
         relevant_string = str(keyboard.read_event())[14:-1]
         index_of_last_space = len(relevant_string) - relevant_string[::-1].index(' ') - 1
         key = relevant_string[:index_of_last_space].lower()
+        print(key)
         action = relevant_string[index_of_last_space + 1:]
         if key in key_names:
             key = key_values[key_names.index(key)]
-        if action == 'down' and key not in are_down:
-            are_down.append(key)
-            F.s.sendto(f'kd{key}'.encode(), F.ip)
-        else:
-            F.s.sendto(f'ku{key}'.encode(), F.ip)
-            are_down.remove(key)
+            if action == 'down' and key not in are_down:
+                are_down.append(key)
+                F.s.sendto(f'kd{key}'.encode(), F.ip)
+            else:
+                F.s.sendto(f'ku{key}'.encode(), F.ip)
+                are_down.remove(key)
+                if 0x10 <= key <= 0x12:
+                    F.s.sendto(f'kd{key}'.encode(), F.ip)
+                    F.s.sendto(f'ku{key}'.encode(), F.ip)
 
 
 def on_scroll(x, y, dx, dy):
@@ -50,6 +56,7 @@ def on_scroll(x, y, dx, dy):
         F.s.sendto("msu".encode(), F.ip)
     else:
         F.s.sendto("msd".encode(), F.ip)
+    time.sleep(0.015)
 
 
 def x_func():
@@ -85,3 +92,4 @@ def log_mouse():
                 F.s.sendto('mrd'.encode(), F.ip)
             else:
                 F.s.sendto('mru'.encode(), F.ip)
+        time.sleep(0.015)
