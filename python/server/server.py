@@ -6,7 +6,6 @@ def send_options(victims_ips: list, s: socket.socket, ip: tuple):
     if not victims_ips:
         s.sendto(st.encode(), ip)
         return
-    st = 'options'
     for i, ap in enumerate(victims_ips):
         st += f'{i + 1}) {ap}\n'
     s.sendto(st[:-2].encode(), ip)
