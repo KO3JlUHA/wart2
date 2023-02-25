@@ -1,5 +1,3 @@
-import socket
-
 from gui import *
 import threading
 
@@ -8,7 +6,7 @@ ip_of_server: tuple = ("192.168.1.211", 8200)
 
 def parser(s: socket.socket, tkinter_handle: TkInterScreen) -> None:
     while True:
-        data, ip = s.recvfrom(__bufsize=1024)
+        data, ip = s.recvfrom(1024)
         decoded_data: str = data.decode()
         if SocketData.is_in_Tkinter:
             while tkinter_handle.menu is None:
@@ -30,7 +28,7 @@ def parser(s: socket.socket, tkinter_handle: TkInterScreen) -> None:
 
 def main():
     client: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    client.sendto(__data="attacker".encode(), __address=ip_of_server)
+    client.sendto("attacker".encode(), ip_of_server)
     SocketData.s = client
     SocketData.ip_of_server = ip_of_server
     t: TkInterScreen = TkInterScreen()
@@ -38,7 +36,7 @@ def main():
     threading.Thread(target=parser, args=(client, t), daemon=True).start()
     while not SocketData.want_to_leave:
         SocketData.is_in_Tkinter = True
-        client.sendto(__data="request_options".encode(), __address=ip_of_server)
+        client.sendto("request_options".encode(), ip_of_server)
         t.main_loop()
         SocketData.is_in_Tkinter = False
         if SocketData.want_to_leave:
