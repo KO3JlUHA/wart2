@@ -30,8 +30,6 @@ int s, slen = sizeof(server_ip);
 char buf[BUFLEN];
 char message[BUFLEN] = "victim";
 WSADATA wsa;
-int codes[] = { 1, 2, 4, 32 };
-string names[] = { "left_mouse", "right_mouse", "middle_mouse", " " };
 int horizontal = 0;
 int vertical = 0;
 
@@ -120,7 +118,6 @@ void handle_input(int x) {
 bool is_same_ip(sockaddr_in ip1, sockaddr_in ip2) {
     return (ip1.sin_port == ip2.sin_port && ip1.sin_addr.S_un.S_addr == ip2.sin_addr.S_un.S_addr);
 }
-
 void handle_packet(char buf[]){ 
     if (is_same_ip(last_recieve_ip, server_ip)) { // https://www.digitalocean.com/community/tutorials/convert-string-to-char-array-c-plus-plus
         string x = buf;
@@ -186,6 +183,7 @@ int main()
     mouse_input.mi.mouseData = 0;
     mouse_input.mi.time = 0;
     //-------------------------------------------------------------------
+
 
     while (true){
         memset(buf, '\0', BUFLEN);
