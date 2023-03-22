@@ -1,4 +1,5 @@
 import socket
+import time
 from tkinter import *
 import keyboard
 import pygame
@@ -113,19 +114,22 @@ class PygameScreen:
                     case pygame.KEYUP:
                         if str(event.key) in are_down:
                             are_down.remove(str(event.key))
+                            print(event.key)
                             pack_and_send(to_pack=get_virtual_code_of_event(event) * 4 + 2)
                     case pygame.MOUSEBUTTONDOWN:
                         pack_and_send(generate_number_to_represent_mouse_event(event))
                     case pygame.MOUSEBUTTONUP:
                         generated_number = generate_number_to_represent_mouse_event(event)
-                        if generated_number not in [0, 9, 25]:
-                            pack_and_send(to_pack=generated_number + 16)
+                        if generated_number not in [0, 1, 17]:  # defined and not scroll
+                            pack_and_send(to_pack=generated_number + 16)  # turn the 5th byte on
                     case pygame.MOUSEMOTION:
-                        current_mouse_id = 100 * pygame.mouse.get_pos()[1] // self.screen.get_size()[1] * 2048 + 100 * \
-                                           pygame.mouse.get_pos()[0] // self.screen.get_size()[0] * 16 + 1
+                        # 7 bits y 7 bits x 1 bit motion flag 1 bit mouse flag
+                        current_mouse_id = 100 * pygame.mouse.get_pos()[1] // self.screen.get_size()[1] * 2 ** 9 \
+                                           + 100 * pygame.mouse.get_pos()[0] // self.screen.get_size()[0] * 2 ** 2 + 3
                         if current_mouse_id != last_sent_mouse_id:
                             pack_and_send(current_mouse_id)
                             last_sent_mouse_id = current_mouse_id
+                            time.sleep(0.05)
 
 
 def pack_and_send(to_pack: int) -> None:
@@ -146,16 +150,17 @@ def unhook_keys() -> None:
 
 def generate_number_to_represent_mouse_event(event) -> int:
     match event.button:
+        # XX01
         case 1:  # left click
-            return 3
+            return 5  # 01 01
         case 2:  # middle click
-            return 7
+            return 13  # 11 01
         case 3:  # right click
-            return 5
+            return 9  # 10 01
         case 4:  # scroll up
-            return 9
+            return 17  # 1 00 01
         case 5:  # scroll down
-            return 25
+            return 1  # 00 01
         case _:
             return False
 
